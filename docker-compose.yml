@@ -1,0 +1,32 @@
+# Demo setup: PostGIS with the MOSIDI table excerpt + one pipeline run.
+# In MOSIDI the `pipeline` service is added to the existing compose file and
+# points at brandenburg_db via the same POSTGRES_* variables as the backend.
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: brandenburg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports: ["55432:5432"]
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d brandenburg"]
+      interval: 3s
+      retries: 20
+
+  pipeline:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: brandenburg
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+    command: ["run"]

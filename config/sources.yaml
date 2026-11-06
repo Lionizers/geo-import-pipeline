@@ -1,0 +1,79 @@
+# Sources of the import pipeline. A new source of an existing type (WFS, CSV)
+# is one more entry here; no code change. Credentials: ${ENV_VAR}.
+reports_dir: reports
+
+sources:
+  # Municipalities of Brandenburg from the WFS of the LGB (Geobasis Brandenburg).
+  - name: gemeinden_bb_wfs
+    type: wfs
+    schedule: "0 3 1 * *"          # monthly, 1st at 03:00
+    options:
+      url: https://isk.geobasis-bb.de/ows/vg_wfs
+      typename: app:gem
+      namespaces: { app: "http://www.deegree.org/app" }
+      version: "2.0.0"
+      page_size: 100
+      pause_seconds: 0.5             # moderate load, no parallel requests
+    target:
+      table: Kommunale Gebiete Deutschland
+      kind: geometry
+      geometry_column: geom
+      geometry_type: MULTIPOLYGON
+      required: [name]
+    key: [ags_0]
+    mapping:                         # target column: source field
+      ags_0: ags
+      ars: ars
+      name: gem_name
+      bez: gem_art
+      beginn: gem_aktualitaet
+    constants:
+      sn_l: "12"
+    metadata:
+      title: Gemeinden Brandenburg (Verwaltungsgrenzen)
+      access_url: https://isk.geobasis-bb.de/ows/vg_wfs
+      license: dl-de/by-2-0 (GeoBasis-DE/LGB)
+      publisher: Landesvermessung und Geobasisinformation Brandenburg (LGB)
+      accrual_periodicity: monthly
+
+  # INKAR indicators (BBSR) on municipality level for Brandenburg.
+  # Demo: bundled sample file. Production: the commented URL streams the
+  # full yearly ZIP (inkar_2025.zip, 434 MB, CSV 6.8 GB) without unpacking it.
+  - name: inkar_gemeinden_bb
+    type: csv
+    schedule: "0 4 2 * *"
+    options:
+      path: samples/inkar_2025_bb_gemeinden_sample.csv
+      # url: https://www.bbr-server.de/imagemap/inkar/download/inkar_2025.zip
+      # zip_member: "inkar_*.csv"
+      delimiter: ";"
+      decimal: ","
+      numeric_fields: [Wert]
+      filters:
+        - { field: Raumbezug, equals: Gemeinden }
+        # INKAR lists some indicators in several areas (LRB, ZOM) with
+        # identical values; one area keeps the key unique
+        - { field: Bereich, equals: LRB }
+        - { field: Kennziffer, startswith: "12" }
+    target:
+      table: dashboard_data_de
+      kind: attribute
+      required: [wert]
+    # business key per INKAR (indicator + area + time) plus the source,
+    # so this import only ever replaces its own attribute rows
+    key: [source, indikator, kennziffer, zeitbezug]
+    mapping:
+      indikator: Indikator
+      kennziffer: Kennziffer
+      zeitbezug: Zeitbezug
+      wert: Wert
+    constants:
+      source: INKAR 2025 (BBSR)
+      granularity: Gemeinden
+      data_type: indicator
+    metadata:
+      title: INKAR Indikatoren Gemeinden
+      access_url: https://www.inkar.de
+      license: dl-de/by-2-0 (BBSR Bonn)
+      publisher: Bundesinstitut für Bau-, Stadt- und Raumforschung (BBSR)
+      accrual_periodicity: annual
